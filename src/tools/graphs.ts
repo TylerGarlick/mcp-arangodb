@@ -8,7 +8,6 @@ import type {
   EdgeDefinition, 
   GraphInfo, 
   DocumentData, 
-  TraverseOptions 
 } from '../types.js';
 
 /**
@@ -21,7 +20,8 @@ export async function createGraph(
   logger.debug('Creating graph', { name, edgeDefinitions });
   const db = getClient();
   
-  const result = await db.createGraph(name, { edgeDefinitions });
+  const graph = db.graph(name);
+  const result = await graph.create(edgeDefinitions);
   
   logger.info('Graph created', { name });
   
@@ -44,14 +44,20 @@ export async function listGraphs(): Promise<GraphInfo[]> {
   
   const graphs = await db.graphs();
   
-  return graphs.map((g: { _id: string; _key: string; _rev: string; name: string; edgeDefinitions: EdgeDefinition[]; orphanCollections: string[] }) => ({
-    _id: g._id,
-    _key: g._key,
-    _rev: g._rev,
-    name: g.name,
-    edgeDefinitions: g.edgeDefinitions,
-    orphanCollections: g.orphanCollections,
-  }));
+  const result: GraphInfo[] = [];
+  for (const g of graphs) {
+    const info = await g.get();
+    result.push({
+      _id: info._id,
+      _key: info._key,
+      _rev: info._rev,
+      name: info.name,
+      edgeDefinitions: info.edgeDefinitions,
+      orphanCollections: info.orphanCollections,
+    });
+  }
+  
+  return result;
 }
 
 /**
@@ -107,17 +113,18 @@ export async function traverseGraph(
   maxDepth: number = 3
 ): Promise<{ vertices: DocumentData[]; edges: DocumentData[] }> {
   logger.debug('Traversing graph', { graphName, startVertex, direction, maxDepth });
+  
   const db = getClient();
   
-  const graph = db.graph(graphName);
+  // Use AQL traversal instead of graph.traverse
+  const query = `
+    FOR vertex, edge IN 1..${maxDepth} ${direction.toUpperCase()} "${startVertex}"
+    GRAPH "${graphName}"
+    RETURN { vertex, edge }
+  `;
   
-  const result = await graph.traverse(startVertex, {
-    direction,
-    maxDepth,
-    visitor: {
-      resultVariable: 'result',
-    },
-  });
+  const cursor = await db.query(query);
+  const results = await cursor.all();
   
   logger.info('Graph traversal completed', { graphName, startVertex });
   
@@ -125,13 +132,15 @@ export async function traverseGraph(
   const vertices: DocumentData[] = [];
   const edges: DocumentData[] = [];
   
-  if (result && typeof result === 'object') {
-    const res = result as { vertices?: DocumentData[]; edges?: DocumentData[] };
-    if (Array.isArray(res.vertices)) {
-      vertices.push(...res.vertices);
-    }
-    if (Array.isArray(res.edges)) {
-      edges.push(...res.edges);
+  for (const item of results) {
+    if (item && typeof item === 'object') {
+      const res = item as { vertex?: DocumentData; edge?: DocumentData };
+      if (res.vertex) {
+        vertices.push(res.vertex);
+      }
+      if (res.edge) {
+        edges.push(res.edge);
+      }
     }
   }
   
@@ -164,7 +173,7 @@ export async function createEdge(
   logger.debug('Creating edge', { collection, from, to });
   const db = getClient();
   
-  const col = db.edgeCollection(collection);
+  const col = db.collection(collection);
   const edgeData = {
     _from: from,
     _to: to,
@@ -189,8 +198,8 @@ export async function getEdge(
   const db = getClient();
   
   try {
-    const col = db.edgeCollection(collection);
-    const edge = await col.edge(id);
+    const col = db.collection(collection);
+    const edge = await (col as any).edge(id);
     return edge as DocumentData;
   } catch {
     logger.warn('Edge not found', { collection, id });

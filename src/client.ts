@@ -4,7 +4,6 @@
 
 import { Database } from 'arangojs';
 import { logger } from './logger.js';
-import type { ServerConfig } from './types.js';
 
 let db: Database | null = null;
 
@@ -29,14 +28,10 @@ export function createClient(): Database {
 
   db = new Database({
     url: normalizedUrl,
+    databaseName: '_system',
     arangoVersion: 31200,
+    auth: config.password ? { username: 'root', password: config.password } : undefined,
   });
-
-  if (config.password) {
-    db = db.useBasicAuth('root', config.password);
-  } else {
-    db = db.useDatabase('_system');
-  }
 
   return db;
 }

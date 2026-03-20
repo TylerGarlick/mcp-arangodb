@@ -12,7 +12,6 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import { 
   StreamableHTTPServerTransport, 
-  isSSETransport,
 } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 
 import { logger } from './logger.js';
@@ -20,6 +19,7 @@ import * as collections from './tools/collections.js';
 import * as documents from './tools/documents.js';
 import * as queries from './tools/queries.js';
 import * as graphs from './tools/graphs.js';
+import type { CollectionType } from './types.js';
 
 // Environment configuration
 const PORT = parseInt(process.env.PORT || '3000', 10);
@@ -310,7 +310,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
 });
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
-  const { name, arguments: args } = request.params;
+  const { name, arguments: args } = request.params as { name: string; arguments: Record<string, unknown> };
   
   logger.info('HTTP Tool called', { name });
   
@@ -322,70 +322,80 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         result = await collections.listCollections();
         break;
       case 'create_collection':
-        result = await collections.createCollection(args.name, args.type);
+        result = await collections.createCollection(args.name as string, args.type as CollectionType | undefined);
         break;
       case 'get_collection':
-        result = await collections.getCollection(args.name);
+        result = await collections.getCollection(args.name as string);
         break;
       case 'delete_collection':
-        result = await collections.deleteCollection(args.name);
+        result = await collections.deleteCollection(args.name as string);
         break;
       case 'get_collection_indexes':
-        result = await collections.getCollectionIndexes(args.name);
+        result = await collections.getCollectionIndexes(args.name as string);
         break;
       case 'create_document':
-        result = await documents.createDocument(args.collection, args.data);
+        result = await documents.createDocument(args.collection as string, args.data as Record<string, unknown>);
         break;
       case 'get_document':
-        result = await documents.getDocument(args.collection, args.id);
+        result = await documents.getDocument(args.collection as string, args.id as string);
         break;
       case 'update_document':
-        result = await documents.updateDocument(args.collection, args.id, args.data);
+        result = await documents.updateDocument(args.collection as string, args.id as string, args.data as Record<string, unknown>);
         break;
       case 'replace_document':
-        result = await documents.replaceDocument(args.collection, args.id, args.data);
+        result = await documents.replaceDocument(args.collection as string, args.id as string, args.data as Record<string, unknown>);
         break;
       case 'delete_document':
-        result = await documents.deleteDocument(args.collection, args.id);
+        result = await documents.deleteDocument(args.collection as string, args.id as string);
         break;
       case 'query_by_example':
-        result = await queries.queryByExample(args.collection, args.example);
+        result = await queries.queryByExample(args.collection as string, args.example as Record<string, unknown>);
         break;
       case 'query_by_range':
-        result = await queries.queryByRange(args.collection, args.attribute, args.low, args.high);
+        result = await queries.queryByRange(args.collection as string, args.attribute as string, args.low, args.high);
         break;
       case 'count_documents':
-        result = await queries.countDocuments(args.collection);
+        result = await queries.countDocuments(args.collection as string);
         break;
       case 'execute_aql':
-        result = await queries.executeAQL(args.query, args.bindVars);
+        result = await queries.executeAQL(args.query as string, args.bindVars as Record<string, unknown> | undefined);
         break;
       case 'generate_aql':
-        result = await queries.generateAQLFromDescription(args.description);
+        result = await queries.generateAQLFromDescription(args.description as string);
         break;
       case 'create_graph':
-        result = await graphs.createGraph(args.name, args.edgeDefinitions);
+        result = await graphs.createGraph(args.name as string, args.edgeDefinitions as Array<{ collection: string; from: string[]; to: string[] }>);
         break;
       case 'list_graphs':
         result = await graphs.listGraphs();
         break;
       case 'get_graph':
-        result = await graphs.getGraph(args.name);
+        result = await graphs.getGraph(args.name as string);
         break;
       case 'delete_graph':
-        result = await graphs.deleteGraph(args.name);
+        result = await graphs.deleteGraph(args.name as string);
         break;
       case 'traverse_graph':
-        result = await graphs.traverseGraph(args.graphName, args.startVertex, args.direction, args.maxDepth);
+        result = await graphs.traverseGraph(
+          args.graphName as string,
+          args.startVertex as string,
+          args.direction as 'outbound' | 'inbound' | 'any' | undefined,
+          args.maxDepth as number | undefined
+        );
         break;
       case 'create_edge_collection':
-        result = await graphs.createEdgeCollection(args.name);
+        result = await graphs.createEdgeCollection(args.name as string);
         break;
       case 'create_edge':
-        result = await graphs.createEdge(args.collection, args.from, args.to, args.data);
+        result = await graphs.createEdge(
+          args.collection as string,
+          args.from as string,
+          args.to as string,
+          args.data as Record<string, unknown> | undefined
+        );
         break;
       case 'get_edge':
-        result = await graphs.getEdge(args.collection, args.id);
+        result = await graphs.getEdge(args.collection as string, args.id as string);
         break;
       default:
         throw new Error(`Unknown tool: ${name}`);
@@ -424,15 +434,16 @@ async function main() {
         transports.set(sessionId, transport);
       }
       
-      transport.on('close', () => {
+      transport.onclose = () => {
         if (sessionId) {
           transports.delete(sessionId);
         }
-      });
+      };
       
       try {
         await server.connect(transport);
-        return transport.handleRequest(req);
+        await transport.handleRequest(req as any, {} as any, await req.clone().json().catch(() => undefined));
+        return new Response(null, { status: 200 });
       } catch (error) {
         logger.error('HTTP request handling failed', { error });
         return new Response(JSON.stringify({ error: String(error) }), {

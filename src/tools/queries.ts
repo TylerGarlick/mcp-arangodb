@@ -26,14 +26,14 @@ export async function executeAQL(
   try {
     const cursor = await db.query(query, bindVars);
     const result = await cursor.all();
-    const stats = cursor.getExtra();
+    const extra = cursor.extra;
     
     logger.info('AQL executed successfully', { resultCount: Array.isArray(result) ? result.length : 1 });
     
     return {
       result,
-      stats: stats as Record<string, unknown>,
-      warnings: stats?.warnings as Array<{ code: number; message: string }> | undefined,
+      stats: extra as unknown as Record<string, unknown>,
+      warnings: extra?.warnings as Array<{ code: number; message: string }> | undefined,
     };
   } catch (error) {
     logger.error('AQL execution failed', { error });
@@ -88,8 +88,8 @@ export async function queryByRange(
   logger.debug('Querying by range', { collection, attribute, low, high });
   const db = getClient();
   
-  const col = db.collection(collection);
-  const cursor = await col.byRange(attribute, low, high);
+  const query = `FOR doc IN ${collection} FILTER doc.${attribute} >= @low && doc.${attribute} <= @high RETURN doc`;
+  const cursor = await db.query(query, { low, high });
   const results = await cursor.all();
   
   logger.info('Query by range completed', { collection, attribute, count: results.length });
@@ -105,7 +105,8 @@ export async function countDocuments(collection: string): Promise<{ count: numbe
   const db = getClient();
   
   const col = db.collection(collection);
-  const count = await col.count();
+  const countResponse = await col.count();
+  const count = countResponse.count ?? 0;
   
   logger.info('Document count', { collection, count });
   

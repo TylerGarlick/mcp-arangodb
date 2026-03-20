@@ -3,8 +3,6 @@
  * Converts natural language descriptions to AQL queries
  */
 
-import type { DocumentData } from '../types.js';
-
 /**
  * Simple AQL generation from natural language
  * This is a rule-based approach that parses common patterns

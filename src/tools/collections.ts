@@ -12,12 +12,12 @@ import type { CollectionInfo, CollectionType } from '../types.js';
 export async function listCollections(): Promise<CollectionInfo[]> {
   logger.debug('Listing collections');
   const db = getClient();
-  const collections = await db.collections();
+  const collections = await db.listCollections();
   
-  return collections.map((col: { _id: string; name: string; type: number; status: number; isSystem: boolean }) => ({
-    id: col._id,
+  return collections.map((col) => ({
+    id: col.name,
     name: col.name,
-    type: col.type === 2 ? 'edge' as CollectionType : 'document' as CollectionType,
+    type: col.type === 3 ? 'edge' as CollectionType : 'document' as CollectionType,
     status: col.status,
     isSystem: col.isSystem,
   }));
@@ -33,18 +33,21 @@ export async function createCollection(
   logger.debug('Creating collection', { name, type });
   const db = getClient();
   
-  const colType = type === 'edge' ? 3 : 2; // 3 = edge collection, 2 = document collection
-  
-  const result = await db.createCollection(name, { type: colType });
+  let result;
+  if (type === 'edge') {
+    result = await db.createCollection(name, { type: 3 });
+  } else {
+    result = await db.createCollection(name);
+  }
   
   logger.info('Collection created', { name, type });
   
   return {
-    id: result._id,
+    id: result.name,
     name: result.name,
     type,
-    status: result.status,
-    isSystem: result.isSystem,
+    status: 0,
+    isSystem: false,
   };
 }
 
@@ -57,14 +60,14 @@ export async function getCollection(name: string): Promise<CollectionInfo | null
   
   try {
     const collection = db.collection(name);
-    const properties = await collection.properties();
+    const info = await collection.get();
     
     return {
-      id: properties.id?.toString() || name,
+      id: name,
       name: collection.name,
-      type: collection.type === 3 ? 'edge' as CollectionType : 'document' as CollectionType,
-      status: 0, // status not directly available
-      isSystem: collection.name.startsWith('_'),
+      type: info.type === 3 ? 'edge' as CollectionType : 'document' as CollectionType,
+      status: info.status,
+      isSystem: info.isSystem,
     };
   } catch {
     logger.warn('Collection not found', { name });
@@ -102,11 +105,13 @@ export async function getCollectionIndexes(
   const collection = db.collection(name);
   const indexes = await collection.indexes();
   
-  return indexes.map((idx: { id?: string; type?: string; fields?: string[]; unique?: boolean; sparse?: boolean }) => ({
-    id: idx.id || '',
-    type: idx.type || 'unknown',
-    fields: idx.fields || [],
-    unique: idx.unique,
-    sparse: idx.sparse,
-  }));
+  return indexes
+    .filter((idx) => idx.type !== 'inverted') // filter out inverted indexes
+    .map((idx) => ({
+      id: idx.id,
+      type: idx.type,
+      fields: Array.isArray(idx.fields) ? (idx.fields as string[]) : [],
+      unique: idx.unique,
+      sparse: idx.sparse,
+    }));
 }
