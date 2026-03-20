@@ -2,7 +2,7 @@
  * ArangoDB client singleton
  */
 
-import { Database } from 'arangodb';
+import { Database } from 'arangojs';
 import { logger } from './logger.js';
 import type { ServerConfig } from './types.js';
 

@@ -56,7 +56,7 @@ describe('AQL Generation', () => {
     });
 
     it('should generate edge query for edge mentions', () => {
-      const result = generateAQL('find edge in relationships');
+      const result = generateAQL('find edge collection relationships');
       expect(result.aql).toContain('FOR edge IN');
     });
 

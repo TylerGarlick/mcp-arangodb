@@ -24,7 +24,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
-    "arangodb": "^3.8.0"
+    "arangojs": "^8.8.0"
   },
   "devDependencies": {
     "@types/bun": "^1.1.0",

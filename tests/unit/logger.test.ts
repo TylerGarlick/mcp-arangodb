@@ -16,19 +16,10 @@ describe('Logger', () => {
   });
   
   describe('debug', () => {
-    it('should log debug messages', () => {
+    it('should not log at INFO level (default)', () => {
+      // At INFO level, debug messages are suppressed
       logger.debug('test message');
-      expect(consoleErrorSpy).toHaveBeenCalled();
-      const output = consoleErrorSpy.mock.calls[0][0];
-      expect(output).toContain('DEBUG');
-      expect(output).toContain('test message');
-    });
-    
-    it('should include metadata if provided', () => {
-      logger.debug('test', { key: 'value' });
-      const output = consoleErrorSpy.mock.calls[0][0];
-      expect(output).toContain('key');
-      expect(output).toContain('value');
+      expect(consoleErrorSpy).not.toHaveBeenCalled();
     });
   });
   

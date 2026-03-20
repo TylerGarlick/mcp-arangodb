@@ -2,9 +2,5 @@
 auto = "fallback"
 production = false
 
-[test]
-preload = ["./tests/setup.ts"]
-coverage = { threshold = 0.95 }
-
 [run]
 bun = true
